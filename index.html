@@ -410,17 +410,24 @@ function libre(){
 function leyenda(t){ $('caption').textContent = t || ''; }
 
 /* ================= comunicación con tu Apps Script ================= */
+var cbN = 0;
 function llamar(accion, params, ok, donde){
-  var q = new URLSearchParams(Object.assign({ action: accion, key: CLAVE, _t: Date.now() }, params || {}));
-  fetch(API_URL + '?' + q.toString())
-    .then(function(r){ return r.text(); })
-    .then(function(t){
-      var j;
-      try { j = JSON.parse(t); }
-      catch(e){ throw new Error('la respuesta no es válida; revisa que la URL sea la de la implementación (termina en /exec) y que el acceso sea "Cualquiera"'); }
-      ok(j);
-    })
-    .catch(function(e){ ocupado = false; libre(); leyenda(''); falla(donde, e); });
+  var cbn = '__jv' + (++cbN) + '_' + Date.now(), fin = false, tm = null, sc = document.createElement('script');
+  var q = new URLSearchParams(Object.assign({ action: accion, key: CLAVE, callback: cbn, _t: Date.now() }, params || {}));
+  function limpia(){
+    clearTimeout(tm);
+    try { delete window[cbn]; } catch(e){ window[cbn] = undefined; }
+    if(sc.parentNode) sc.parentNode.removeChild(sc);
+  }
+  function mal(e){ ocupado = false; libre(); leyenda(''); falla(donde, e); }
+  tm = setTimeout(function(){ if(fin) return; fin = true; limpia(); mal('no hubo respuesta del Apps Script (tiempo agotado)'); }, 25000);
+  window[cbn] = function(j){
+    if(fin) return; fin = true; limpia();
+    try { ok(j); } catch(e){ mal(e); }
+  };
+  sc.onerror = function(){ if(fin) return; fin = true; limpia(); mal('no se pudo conectar con el Apps Script; revisa que la implementación esté publicada con acceso "Cualquiera"'); };
+  sc.src = API_URL + '?' + q.toString();
+  document.head.appendChild(sc);
 }
 
 if(/^PEGA_/.test(API_URL)){
